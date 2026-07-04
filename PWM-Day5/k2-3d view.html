@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>K2 — 360° Survey Model</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap');
+
+:root{
+  --ink:#0b1220;
+  --panel:#121b2e;
+  --panel-line:#24334d;
+  --ice:#eaf2f7;
+  --muted:#8ea2bd;
+  --alpenglow:#e8703a;
+  --snow:#f5f7fa;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--ice);font-family:'Inter',sans-serif;overflow:hidden;}
+
+#wrap{position:relative;width:100%;height:100vh;}
+canvas{display:block;touch-action:none;cursor:grab;}
+canvas:active{cursor:grabbing;}
+
+#title{
+  position:absolute; top:22px; left:26px; z-index:5; pointer-events:none;
+}
+#title h1{
+  font-family:'Oswald',sans-serif; font-weight:700; font-size:22px; letter-spacing:0.06em;
+  margin:0; text-transform:uppercase; color:var(--snow);
+}
+#title p{
+  margin:4px 0 0; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);
+  letter-spacing:0.04em;
+}
+
+#hud{
+  position:absolute; bottom:22px; left:26px; z-index:5;
+  font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);
+  background:rgba(18,27,46,0.55); border:1px solid var(--panel-line); border-radius:2px;
+  padding:10px 14px; backdrop-filter:blur(4px); min-width:220px;
+}
+#hud .row{display:flex; justify-content:space-between; padding:2px 0;}
+#hud .row span:last-child{color:var(--ice);}
+#hud .label{color:var(--alpenglow); text-transform:uppercase; font-size:10px; letter-spacing:0.08em; margin-bottom:6px; display:block;}
+
+#presets{
+  position:absolute; top:22px; right:26px; z-index:5; display:flex; flex-direction:column; gap:6px; align-items:flex-end;
+}
+.preset-btn{
+  font-family:'Oswald',sans-serif; font-size:12px; letter-spacing:0.05em; text-transform:uppercase;
+  background:rgba(18,27,46,0.6); color:var(--ice); border:1px solid var(--panel-line);
+  padding:8px 14px; border-radius:2px; cursor:pointer; transition:all 0.15s ease; backdrop-filter:blur(4px);
+}
+.preset-btn:hover{border-color:var(--alpenglow); color:var(--alpenglow);}
+.preset-btn.active{background:var(--alpenglow); color:#1a0e08; border-color:var(--alpenglow);}
+
+#caption{
+  position:absolute; bottom:22px; right:26px; z-index:5; max-width:260px;
+  font-size:11px; line-height:1.5; color:var(--muted); text-align:right;
+}
+
+#drag-hint{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);
+  letter-spacing:0.08em; text-transform:uppercase; pointer-events:none;
+  opacity:1; transition:opacity 0.6s ease; z-index:4;
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="title">
+    <h1>K2 — Savage Mountain</h1>
+    <p>35°52′57″N · 76°30′48″E — Karakoram Range — 8,611 m / 28,251 ft</p>
+  </div>
+
+  <div id="presets">
+    <button class="preset-btn" data-view="south">South Face · Abruzzi Spur (PK)</button>
+    <button class="preset-btn" data-view="north">North Face (China)</button>
+    <button class="preset-btn" data-view="east">East · from Concordia / Base Camp</button>
+    <button class="preset-btn" data-view="aerial">Aerial · Summit Down</button>
+  </div>
+
+  <div id="hud">
+    <span class="label">Survey Bearing</span>
+    <div class="row"><span>Heading</span><span id="hud-heading">000°</span></div>
+    <div class="row"><span>Elevation angle</span><span id="hud-pitch">00°</span></div>
+    <div class="row"><span>Facing</span><span id="hud-face">South Face</span></div>
+  </div>
+
+  <div id="caption">Procedural topographic reconstruction of K2's true profile —<br>steep pyramidal form, asymmetric ridgelines, permanent snowcap.<br>Drag to orbit · scroll to zoom.</div>
+
+  <div id="drag-hint">Click + drag to rotate</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ---------- scene setup ----------
+const wrap = document.getElementById('wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1220);
+scene.fog = new THREE.FogExp2(0x0b1220, 0.012);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+wrap.appendChild(renderer.domElement);
+
+// starfield
+{
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 600;
+  const pos = new Float32Array(starCount*3);
+  for(let i=0;i<starCount;i++){
+    const r = 80 + Math.random()*60;
+    const theta = Math.random()*Math.PI*2;
+    const phi = Math.random()*Math.PI*0.5;
+    pos[i*3] = r*Math.sin(phi)*Math.cos(theta);
+    pos[i*3+1] = r*Math.cos(phi)*0.6 + 10;
+    pos[i*3+2] = r*Math.sin(phi)*Math.sin(theta);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const starMat = new THREE.PointsMaterial({color:0xaebcd6, size:0.15, transparent:true, opacity:0.6});
+  scene.add(new THREE.Points(starGeo, starMat));
+}
+
+// ---------- lighting ----------
+const sun = new THREE.DirectionalLight(0xffe0c2, 1.4);
+sun.position.set(-14, 10, 8);
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x6a86b8, 0.5);
+fill.position.set(10, 6, -8);
+scene.add(fill);
+scene.add(new THREE.AmbientLight(0x30405f, 0.7));
+
+// ---------- pseudo-noise ----------
+function hash(x,y,z){
+  const s = Math.sin(x*127.1 + y*311.7 + z*74.7)*43758.5453;
+  return s - Math.floor(s);
+}
+function noise3(x,y,z){
+  const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor(z);
+  const xf=x-xi, yf=y-yi, zf=z-zi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf), w=zf*zf*(3-2*zf);
+  const c000=hash(xi,yi,zi), c100=hash(xi+1,yi,zi), c010=hash(xi,yi+1,zi), c110=hash(xi+1,yi+1,zi);
+  const c001=hash(xi,yi,zi+1), c101=hash(xi+1,yi,zi+1), c011=hash(xi,yi+1,zi+1), c111=hash(xi+1,yi+1,zi+1);
+  const x00=c000*(1-u)+c100*u, x10=c010*(1-u)+c110*u, x01=c001*(1-u)+c101*u, x11=c011*(1-u)+c111*u;
+  const y0=x00*(1-v)+x10*v, y1=x01*(1-v)+x11*v;
+  return y0*(1-w)+y1*w;
+}
+function fbm(x,y,z){
+  let val=0, amp=0.5, freq=1;
+  for(let i=0;i<5;i++){ val += amp*noise3(x*freq,y*freq,z*freq); amp*=0.5; freq*=2.1; }
+  return val;
+}
+
+// ---------- build the peak ----------
+const HEIGHT = 9;
+const BASE_R = 6.2;
+const geo = new THREE.ConeGeometry(BASE_R, HEIGHT, 96, 48, false);
+geo.translate(0, HEIGHT/2 - HEIGHT*0.42, 0);
+
+const pos = geo.attributes.position;
+const colors = new Float32Array(pos.count*3);
+const rock1 = new THREE.Color(0x5a5148);
+const rock2 = new THREE.Color(0x7d7266);
+const snow  = new THREE.Color(0xf2f5f8);
+const shadowRock = new THREE.Color(0x353030);
+
+for(let i=0;i<pos.count;i++){
+  const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+  const heightFrac = (y + HEIGHT*0.42) / HEIGHT; // 0 base -> 1 tip
+  const angle = Math.atan2(z, x);
+
+  // asymmetric ridges: steeper / craggier on the "north" side (angle near PI)
+  const northBias = (Math.cos(angle - Math.PI) * 0.5 + 0.5);
+  const ridgeNoise = fbm(x*0.55, y*0.5, z*0.55) * (0.9 + northBias*0.6);
+  const displacement = ridgeNoise * (1 - heightFrac*0.55) * 1.3;
+
+  const nx = x + (x/ (Math.hypot(x,z)||1)) * displacement * 0.5;
+  const nz = z + (z/ (Math.hypot(x,z)||1)) * displacement * 0.5;
+  const ny = y + displacement * 0.35;
+  pos.setXYZ(i, nx, ny, nz);
+
+  // color by elevation + a little rock/shadow variance
+  let c = new THREE.Color();
+  const snowLine = 0.72 + noise3(x*0.3,0,z*0.3)*0.08;
+  if(heightFrac > snowLine){
+    const t = Math.min(1,(heightFrac - snowLine)/(1-snowLine));
+    c.copy(rock2).lerp(snow, t*1.3);
+  } else {
+    const t = (Math.sin(ridgeNoise*6)+1)/2;
+    c.copy(rock1).lerp(rock2, t);
+    if(northBias>0.6) c.lerp(shadowRock, 0.25);
+  }
+  colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+}
+geo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+geo.computeVertexNormals();
+
+const mat = new THREE.MeshStandardMaterial({vertexColors:true, flatShading:true, roughness:0.85, metalness:0.05});
+const peak = new THREE.Mesh(geo, mat);
+scene.add(peak);
+
+// base glacier plane
+const planeGeo = new THREE.CircleGeometry(40, 64);
+const planeMat = new THREE.MeshStandardMaterial({color:0x1a2740, roughness:1});
+const plane = new THREE.Mesh(planeGeo, planeMat);
+plane.rotation.x = -Math.PI/2;
+plane.position.y = -HEIGHT*0.42 - 0.05;
+scene.add(plane);
+
+// ---------- orbit controls (manual) ----------
+let theta = Math.PI*0.15;   // horizontal angle
+let phi = 1.15;             // vertical angle (from y axis)
+let radius = 17;
+let targetTheta = theta, targetPhi = phi, targetRadius = radius;
+let dragging = false, lastX=0, lastY=0;
+
+function updateCamera(){
+  theta += (targetTheta-theta)*0.08;
+  phi += (targetPhi-phi)*0.08;
+  radius += (targetRadius-radius)*0.08;
+  const clampedPhi = Math.max(0.35, Math.min(1.5, phi));
+  camera.position.x = radius*Math.sin(clampedPhi)*Math.sin(theta);
+  camera.position.y = radius*Math.cos(clampedPhi) + 1;
+  camera.position.z = radius*Math.sin(clampedPhi)*Math.cos(theta);
+  camera.lookAt(0, -0.5, 0);
+
+  const heading = ((theta*180/Math.PI) % 360 + 360) % 360;
+  document.getElementById('hud-heading').textContent = heading.toFixed(0).padStart(3,'0')+'°';
+  document.getElementById('hud-pitch').textContent = (90 - clampedPhi*180/Math.PI).toFixed(0)+'°';
+
+  let face = 'North Face';
+  const h = heading;
+  if(h>315||h<=45) face='South Face';
+  else if(h>45&&h<=135) face='East Ridge';
+  else if(h>135&&h<=225) face='North Face';
+  else face='West Face';
+  if(clampedPhi < 0.5) face = 'Summit — Aerial';
+  document.getElementById('hud-face').textContent = face;
+}
+
+const dom = renderer.domElement;
+dom.addEventListener('pointerdown', e=>{dragging=true; lastX=e.clientX; lastY=e.clientY; document.getElementById('drag-hint').style.opacity=0;});
+window.addEventListener('pointerup', ()=>dragging=false);
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  targetTheta += (e.clientX-lastX)*0.006;
+  targetPhi -= (e.clientY-lastY)*0.005;
+  targetPhi = Math.max(0.35, Math.min(1.5, targetPhi));
+  lastX=e.clientX; lastY=e.clientY;
+});
+dom.addEventListener('wheel', e=>{
+  e.preventDefault();
+  targetRadius = Math.max(9, Math.min(30, targetRadius + e.deltaY*0.01));
+}, {passive:false});
+
+// preset views
+const views = {
+  south: {theta: 0, phi: 1.15, radius:17},
+  north: {theta: Math.PI, phi: 1.15, radius:17},
+  east:  {theta: Math.PI/2, phi: 1.2, radius:16},
+  aerial:{theta: Math.PI*0.3, phi: 0.42, radius:20},
+};
+document.querySelectorAll('.preset-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const v = views[btn.dataset.view];
+    targetTheta = v.theta; targetPhi = v.phi; targetRadius = v.radius;
+    document.getElementById('drag-hint').style.opacity=0;
+  });
+});
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function animate(){
+  requestAnimationFrame(animate);
+  updateCamera();
+  renderer.render(scene, camera);
+}
+updateCamera();
+animate();
+</script>
+</body>
+</html>
