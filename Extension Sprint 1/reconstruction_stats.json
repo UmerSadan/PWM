@@ -1,0 +1,26 @@
+{
+  "config": {
+    "n_frames": 14,
+    "pixel_noise_std": 1.1,
+    "reproj_threshold_px": 2.5,
+    "refinement_enabled": true,
+    "seed": 11
+  },
+  "counts": {
+    "ground_truth_points": 1356,
+    "points_with_2plus_views": 1194,
+    "points_triangulated": 1194,
+    "points_kept_after_filter": 1194,
+    "points_dropped_as_outliers": 0
+  },
+  "accuracy_vs_ground_truth_world_units": {
+    "mean": 0.00855390742231679,
+    "median": 0.008087689162379744,
+    "max": 0.08112281754803123
+  },
+  "reprojection_error_px": {
+    "mean": 1.2078319893301215,
+    "median": 1.2013391562220117,
+    "max": 2.057224504806918
+  }
+}
