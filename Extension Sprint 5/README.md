@@ -3,8 +3,8 @@
 > **Coursework Module**: Polish one final artifact so it is certificate-ready: technically sound, viewable, explained, and connected to PMW  
 > **Final Selected Target**: Upgrade of Extension Sprint 4 Artifact (`Extension Sprint 4` ➔ `Extension Sprint 5`)  
 > **Repository Path**: `UmerSadan/PWM` -> `/Extension Sprint 5`  
-> **Claimed Time**: **3.9 Hours** *(Max Claim Allowed: 4.0 Hours)* | **Work Window**: August 1, 2026 (18:30 – 22:24 PKT)  
-> **Certificate Rubric Score**: **20 / 20 (Outstanding / Certificate-Ready)**  
+> **Claimed Time**: **2 Hours** *(Max Claim Allowed: 4.0 Hours)* | **Work Window**: August 1, 2026 (20:00 – 22:00 PKT)  
+
 
 ---
 
